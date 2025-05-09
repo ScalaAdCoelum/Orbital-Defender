@@ -10,7 +10,7 @@
 
 ## 🎮 Demo
 
-> 💡 [Play it here (Live Demo)](https://your-itch-or-github-pages-link.com)  
+> 💡 [Play it here (Live Demo)]([https://your-itch-or-github-pages-link.com](https://scalaadcoelum.github.io/Orbital-Defender/))  
 > *(Optimized for desktop & mobile!)*
 
 ---
