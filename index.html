@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Orbital Defender</title>
+    <meta name="description" content="Defend your orbital space station against waves of alien invaders! A thrilling space shooter game with customizable ships and intense gameplay.">
+    <meta name="keywords" content="space shooter, orbital defender, alien invaders, customizable ships, arcade game, HTML5 game">
+    <meta name="author" content="Yun">
+    <meta name="theme-color" content="#4e54ff">
+    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="cursor" id="custom-cursor"></div>
+    <div class="game-container">
+        <!-- Start Screen -->
+        <div id="start-screen" class="screen">
+            <div class="title-container">
+                <img id="game-logo" src="assets/logo.png" alt="Orbital Defender Logo" />
+                <div class="planet-icon"><i class="fas fa-globe-americas fa-spin"></i></div>
+            </div>
+            <button id="start-button" class="pulse-button">
+                <i class="fas fa-rocket"></i> LAUNCH MISSION
+            </button>
+            <div class="instructions">
+                <p>Defend your orbital space station against waves of alien invaders!</p>
+                <div class="control-info">
+                    <div class="control-group">
+                        <h3>DESKTOP</h3>
+                        <p><i class="fas fa-mouse-pointer"></i> AIM with mouse</p>
+                        <p><i class="fas fa-arrows-alt"></i> MOVE with WASD</p>
+                        <p><i class="fas fa-mouse"></i> SHOOT with left click</p>
+                        <p><i class="fas fa-keyboard"></i> SPECIAL with SPACE</p>
+                    </div>
+                    <div class="control-group">
+                        <h3>MOBILE</h3>
+                        <p><i class="fas fa-hand-pointer"></i> Joystick to MOVE</p>
+                        <p><i class="fas fa-mobile-alt"></i> Auto-aim & Auto-fire</p>
+                        <p><i class="fas fa-bolt"></i> Tap SPECIAL button</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+         <!-- Achievements Screen -->
+         <div id="achievements-screen" class="screen hidden">
+            <h2>ACHIEVEMENTS</h2>
+            <div id="achievements-container">
+                <!-- Achievement items will be added dynamically -->
+            </div>
+            <button id="achievements-back-button" class="pulse-button">
+                <i class="fas fa-arrow-left"></i> BACK
+            </button>
+        </div>
+        <!-- Ship Customization Screen -->
+        <div id="customization-screen" class="screen hidden">
+            <h2>SHIP CUSTOMIZATION</h2>
+            <div class="customization-container">
+                <div class="ship-preview">
+                    <canvas id="preview-canvas" width="400" height="400"></canvas>
+                </div>
+                <div class="customization-options">
+                    <div class="option-group">
+                        <h3>SHIP COLOR</h3>
+                        <div class="color-options">
+                            <div class="color-option" data-color="#4e54ff" style="background-color: #4e54ff;"></div>
+                            <div class="color-option" data-color="#38b6ff" style="background-color: #38b6ff;"></div>
+                            <div class="color-option" data-color="#50c878" style="background-color: #50c878;"></div>
+                            <div class="color-option" data-color="#ff5e78" style="background-color: #ff5e78;"></div>
+                            <div class="color-option" data-color="#ffbd69" style="background-color: #ffbd69;"></div>
+                            <div class="color-option" data-color="#9932cc" style="background-color: #9932cc;"></div>
+                        </div>
+                    </div>
+                    <div class="option-group">
+                        <h3>SHIP DESIGN</h3>
+                        <div class="design-options">
+                            <div class="design-option" data-design="fighter">
+                                <i class="fas fa-fighter-jet"></i>
+                                <span>Fighter</span>
+                            </div>
+                            <div class="design-option" data-design="scout">
+                                <i class="fas fa-rocket"></i>
+                                <span>Scout</span>
+                            </div>
+                            <div class="design-option" data-design="cruiser">
+                                <i class="fas fa-space-shuttle"></i>
+                                <span>Cruiser</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="option-group">
+                        <h3>TRAIL EFFECT</h3>
+                        <div class="trail-options">
+                            <div class="trail-option" data-trail="standard">
+                                <span>Standard</span>
+                            </div>
+                            <div class="trail-option" data-trail="flames">
+                                <span>Flames</span>
+                            </div>
+                            <div class="trail-option" data-trail="energy">
+                                <span>Energy</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button id="customization-save-button" class="pulse-button">
+                <i class="fas fa-save"></i> SAVE CHANGES
+            </button>
+            <button id="customization-back-button" class="pulse-button">
+                <i class="fas fa-arrow-left"></i> BACK
+            </button>
+        </div>
+
+        <!-- Game Screen -->
+        <canvas id="game-canvas"></canvas>
+        
+        <!-- HUD Elements -->
+        <div id="hud" class="hidden">
+            <div id="score-container">
+                <i class="fas fa-star"></i> <span id="score">0</span>
+            </div>
+            <div id="wave-container">
+                <i class="fas fa-meteor"></i> WAVE <span id="wave">1</span>
+            </div>
+            <div id="health-container">
+                <div id="health-bar">
+                    <div id="health-fill"></div>
+                </div>
+                <i class="fas fa-heart"></i> <span id="health">100</span>
+            </div>
+            <div id="special-container">
+                <button id="special-button" class="pulse-button">
+                    <i class="fas fa-atom"></i>
+                </button>
+                <div id="special-cooldown"></div>
+            </div>
+            <div id="mobile-controls" class="hidden">
+                <div id="joystick-area">
+                    <div id="joystick-base">
+                        <div id="joystick-thumb"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over" class="screen hidden">
+            <h2>MISSION FAILED</h2>
+            <div class="stats">
+                <p>SCORE: <span id="final-score">0</span></p>
+                <p>WAVES SURVIVED: <span id="final-wave">0</span></p>
+                <p>ENEMIES DESTROYED: <span id="enemies-destroyed">0</span></p>
+            </div>
+            <button id="restart-button" class="pulse-button">
+                <i class="fas fa-redo"></i> TRY AGAIN
+            </button>
+        </div>
+
+        <!-- Pause Screen -->
+        <div id="pause-screen" class="screen hidden">
+            <h2>PAUSED</h2>
+            <button id="resume-button" class="pulse-button">
+                <i class="fas fa-play"></i> RESUME
+            </button>
+            <button id="quit-button" class="pulse-button">
+                <i class="fas fa-power-off"></i> QUIT
+            </button>
+            <div class="volume-controls">
+                <div class="volume-control">
+                    <i class="fas fa-music"></i>
+                    <input type="range" id="music-volume" min="0" max="1" step="0.1" value="0.5">
+                </div>
+                <div class="volume-control">
+                    <i class="fas fa-volume-up"></i>
+                    <input type="range" id="sfx-volume" min="0" max="1" step="0.1" value="0.7">
+                </div>
+            </div>
+        </div>
+
+        <!-- Pause Button -->
+        <button id="pause-button" class="hidden">
+            <i class="fas fa-pause"></i>
+        </button>
+
+        <!-- FPS Counter for development -->
+        <div id="fps-counter" class="hidden">FPS: 0</div>
+    </div>
+
+    <!-- Audio elements -->
+    <audio id="bg-music" loop>
+        <source src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAbAAWFhYWFhYWFhYhISEhISEhISEtLS0tLS0tLS0tNfX19fX19fX19cAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/4zjEACYAKwBjAGEAZgBnAFZXV1dXV1dXV3d3d3d3d3d3d6qqqqqqqqqqqsrKysrKysrKytvb29vb29vb2/v7+/v7+/v7+wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/4zjEKgAAADgBgBEYER2E5QGIdAI4TswLQgfHAYQJwgXn/fPzwp0KfAPBQFAQdQZUB5QBUcdQnCgnCAqpn//gDQQKQgTgCxQChQJEBQoO1AqoHygZEA+UE5QDkA+AcoA+oAyAq4HWwD/OAYgD0gFE" type="audio/mp3">
+    </audio>
+    <audio id="laser-sound">
+        <source src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjIwLjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAXgAVVVVVVVVVVVVgICAgICAgICAgKysrKysrKysrKzX19fX19fX19cAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/4zjEACYRuwBjAGQBgBnaMTPQDgCeEEBAKDAaHgQDwIAwcD4IBweCgfBAOBAPCp0KFCpcKnQsUKpQqFCsUKghAoVShQEIFAoUSh5/4zi0QiAB0AFIAUAACBgDACATgQCAEAwlSoIElQqVBCgoVKhUEIChUEICgoOoIQCEDqCgIQOhQQgdCgggdQU" type="audio/mp3">
+    </audio>
+    <audio id="explosion-sound">
+        <source src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjIwLjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAXgAVVVVVVVVVVVVgICAgICAgICAgKysrKysrKysrKzX19fX19fX19cAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/4zjEACYRuwBjAGQAmAIdjMTPQCgCPSoQOhAlAIQJQCB0KhQQgKChUuFRoIHQoIQOoKAhA6FAQgfAhwQP/+M4xEkgAAqBUAGMADgOBgIHxUBgMD8EBYOgkOAoMiUChIZEwyLCQyKikdEQ0OjIyMjImKjIkJCgyJhoaGBAKGoY" type="audio/mp3">
+    </audio>
+    <audio id="powerup-sound">
+        <source src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjIwLjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAXgAVVVVVVVVVVVVgICAgICAgICAgKysrKysrKysrKzX19fX19fX19cAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/4zjEACYRuwBjAGQAmCHbGLQQBAA8IBwQDwQBgQDgQDggDwQB4IB4QD4OA8IBwcB8IAeEAuCA+CAeCA+DgOA4XA+B8L/+M4xFMgAAqBsAGMACAfBAfBwlA+DgOAoXA+D4OAoXBoXBoVA+D4NBoPg+Dw0Hw0Hg0HgaCQQCAQCAMDQwMDAwM" type="audio/mp3">
+    </audio>
+    <audio id="click-sound">
+        <source src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjIwLjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAXgAVVVVVVVVVVVVgICAgICAgICAgKysrKysrKysrKzX19fX19fX19cAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/4zjEACYRuwBjAGQAgAs2MQDgYA+CAcDAPggJwQDgIAeCAXA4D4PBcGguDQVBoMhIOCAaBwaGhcVFBQVFRUODlkOGR//+M4xGocAB6JAAGPACIVFxYZGRkeHR4fHx4fGxsaGRgUEhIREA4MC4oSGCAmKQZVmmbLDvPUxWa0FrRcNWkaBB" type="audio/mp3">
+    </audio>
+    <audio id="game-over-sound">
+        <source src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjIwLjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAXgAVVVVVVVVVVVVgICAgICAgICAgKysrKysrKysrKzX19fX19fX19cAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/4zjEACYRuwBjAGQAmAIkIUYQCAF5TiQqNCIqKCosMjAyMDYyNjQ2NCImMCI2KjYoKjI0MDQ0ODYqNjA2KjY0NCI2ODYs//+M4xFcgAB5ZkAGPACJEkSbK0qilKm6TKjMdJlSHKcqcqcyEyZMdI9JlJkCB0BAeBB0KAgggdCBoCAYBgCA" type="audio/mp3">
+    </audio>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
