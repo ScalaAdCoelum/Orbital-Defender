@@ -762,7 +762,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   justify-content: center;
   align-items: center;
   position: absolute;
-  top: 50%;   
+  top: 100%;   
   left: 50%;
   transform: translate(-50%, -50%);
   animation: fadeInLogo 1s ease-in-out;
@@ -773,4 +773,27 @@ input[type="range"]::-webkit-slider-thumb:hover {
 @keyframes fadeInLogo {
   from { opacity: 0; }
   to   { opacity: 0.3; }
+}
+
+.main-menu-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.secondary-buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+#start-button {
+  font-size: 1.5rem;
+  padding: 1.2rem 2.5rem;
+  width: auto;
+}
+
+#achievements-button, #customization-button {
+  font-size: 1.1rem;
+  padding: 1rem 1.5rem;
 }

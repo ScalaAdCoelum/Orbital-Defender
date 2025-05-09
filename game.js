@@ -4,6 +4,7 @@
 // === GAME INITIALIZATION ===
 document.addEventListener('DOMContentLoaded', init);
 setupFullscreenAuto();
+addCSS()
 
 // Global variables
 let game = {
@@ -49,7 +50,17 @@ let game = {
         laser: 100,
         missile: 250,
         shield: 150
-    }
+    },
+    settings: {
+        movementSensitivity: 1.0, // Default sensitivity, 0.5 to 1.5 range
+        dashCooldown: 1000, // Cooldown in ms
+        dashPower: 2.5, // Multiplier for dash strength
+        dashDuration: 200, // Duration of dash boost in ms
+    },
+    dashReady: true,
+    dashActive: false,
+    dashCooldownTime: 0,
+    brakeActive: false,
 };
 
 let input = {
@@ -302,8 +313,9 @@ function init() {
     setupCanvas();
     setupEventListeners();
     setupSounds();
-    loadHighScore();
-    loadShipCustomization(); // Load saved ship customization
+    loadHighScore();    
+    loadShipCustomization();
+    addSettingsToDOM();
     
     // Start screen is already visible in HTML
     document.getElementById('start-button').addEventListener('click', startGame);
@@ -403,6 +415,72 @@ function updateAchievementsDisplay() {
         
         container.appendChild(item);
     });
+}
+
+function activateDash() {
+    if (!game.dashReady || !player || game.paused) return;
+    
+    // Activate dash
+    game.dashActive = true;
+    game.dashReady = false;
+    game.dashDuration = game.settings.dashDuration;
+    game.dashCooldownTime = game.settings.dashCooldown;
+    
+    // Create dash effect
+    createExplosion(player.x, player.y, 0.7, '#4e54ff');
+    
+    // Show dash text
+    createFloatingText(player.x, player.y - 30, "DASH!", '#4e54ff', 20);
+    
+    // Play sound effect (reuse explosion sound but with lower volume)
+    const dashSound = sounds.explosion.cloneNode();
+    dashSound.volume = sounds.volumes.sfx * 0.4;
+    dashSound.play();
+}
+
+function addCSS() {
+    const style = document.createElement('style');
+    style.textContent = `
+        /* Sensitivity control */
+        .sensitivity-control {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .setting-label {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .setting-label i {
+            margin-right: 0.5rem;
+        }
+        
+        #sensitivity-value {
+            margin-left: 0.5rem;
+            min-width: 2rem;
+            text-align: center;
+        }
+        
+        /* Mobile brake button */
+        #brake-button {
+            position: absolute;
+            bottom: 1.5rem;
+            right: 8rem;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            background: radial-gradient(circle, #38b6ff, #4e54ff);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0;
+        }
+    `;
+    document.head.appendChild(style);
 }
 
 function setupShipCustomization() {
@@ -662,6 +740,9 @@ function setupEventListeners() {
         }
     });
     
+    let lastKeyPressTime = {};
+    const doubleTapThreshold = 300;
+
     // Keyboard controls
     window.addEventListener('keydown', (e) => {
         input.keys[e.key.toLowerCase()] = true;
@@ -673,6 +754,27 @@ function setupEventListeners() {
             } else {
                 togglePause();
             }
+        }
+
+        if (e.key === 'Shift' && game.running && !game.paused) {
+            game.brakeActive = true;
+        }
+        
+        // Handle double-tap dashing
+        const key = e.key.toLowerCase();
+        const movementKeys = ['w', 's', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
+        
+        if (movementKeys.includes(key) && game.running && !game.paused) {
+            const currentTime = Date.now();
+            
+            if (lastKeyPressTime[key] && currentTime - lastKeyPressTime[key] < doubleTapThreshold) {
+                // Double-tap detected - activate dash if ready
+                if (game.dashReady) {
+                    activateDash();
+                }
+            }
+            
+            lastKeyPressTime[key] = currentTime;
         }
         
         // Special ability with Space
@@ -690,6 +792,9 @@ function setupEventListeners() {
     
     window.addEventListener('keyup', (e) => {
         input.keys[e.key.toLowerCase()] = false;
+        if (e.key === 'Shift') {
+            game.brakeActive = false;
+        }
     });
     
     // Button event listeners
@@ -1266,6 +1371,343 @@ function createFloatingText(x, y, text, color = '#ffffff', size = 20) {
     });
 }
 
+function initComboSystem() {
+    game.combo = {
+        count: 0,
+        timer: 0,
+        timerMax: 5, // Seconds before combo expires
+        multiplier: 1,
+        lastPosition: { x: 0, y: 0 }
+    };
+}
+
+function updateComboSystem() {
+    // Update combo timer
+    if (game.combo.count > 0) {
+        game.combo.timer -= game.deltaTime;
+        
+        if (game.combo.timer <= 0) {
+            // Combo expired
+            if (game.combo.count >= 5) {
+                createFloatingText(
+                    game.combo.lastPosition.x,
+                    game.combo.lastPosition.y,
+                    `COMBO BREAK! x${game.combo.count}`,
+                    '#ffbd69',
+                    20
+                );
+            }
+            
+            // Reset combo
+            game.combo.count = 0;
+            game.combo.multiplier = 1;
+        }
+    }
+}
+
+function increaseCombo(enemyX, enemyY, score) {
+    // Store position of last kill
+    game.combo.lastPosition.x = enemyX;
+    game.combo.lastPosition.y = enemyY;
+    
+    // Increment combo
+    game.combo.count++;
+    
+    // Reset timer
+    game.combo.timer = game.combo.timerMax;
+    
+    // Calculate multiplier (starts at 1, maxes at 4)
+    game.combo.multiplier = Math.min(4, 1 + Math.floor(game.combo.count / 5) * 0.5);
+    
+    // Apply score bonus
+    const bonusScore = Math.floor(score * (game.combo.multiplier - 1));
+    game.score += bonusScore;
+    
+    // Display combo message
+    if (game.combo.count > 1) {
+        let comboText = `COMBO x${game.combo.count}`;
+        if (game.combo.multiplier > 1) {
+            comboText += ` (${game.combo.multiplier.toFixed(1)}x)`;
+        }
+        
+        createFloatingText(
+            enemyX,
+            enemyY - 30,
+            comboText,
+            '#4e54ff',
+            15
+        );
+        
+        if (bonusScore > 0) {
+            createFloatingText(
+                enemyX,
+                enemyY - 50,
+                `+${bonusScore} BONUS`,
+                '#50c878',
+                12
+            );
+        }
+    }
+}
+
+function drawComboIndicator() {
+    if (game.combo.count <= 1) return;
+    
+    // Get position (upper right corner of screen)
+    const indicatorX = game.width - 100;
+    const indicatorY = 80;
+    
+    // Draw combo text
+    game.ctx.textAlign = 'right';
+    game.ctx.font = 'bold 18px "Exo 2"';
+    game.ctx.fillStyle = '#4e54ff';
+    game.ctx.fillText(`COMBO x${game.combo.count}`, indicatorX, indicatorY);
+    
+    // Draw multiplier if active
+    if (game.combo.multiplier > 1) {
+        game.ctx.font = '14px "Exo 2"';
+        game.ctx.fillStyle = '#50c878';
+        game.ctx.fillText(`${game.combo.multiplier.toFixed(1)}x SCORE`, indicatorX, indicatorY + 20);
+    }
+    
+    // Draw timer bar
+    const barWidth = 80;
+    const barHeight = 3;
+    const barX = indicatorX - barWidth;
+    const barY = indicatorY + 25;
+    
+    // Background
+    game.ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+    game.ctx.fillRect(barX, barY, barWidth, barHeight);
+    
+    // Fill based on timer
+    const fillWidth = (game.combo.timer / game.combo.timerMax) * barWidth;
+    
+    // Change color based on time remaining
+    let fillColor;
+    if (game.combo.timer < game.combo.timerMax * 0.25) {
+        fillColor = '#ff3054'; // Red when almost expired
+    } else if (game.combo.timer < game.combo.timerMax * 0.5) {
+        fillColor = '#ffbd69'; // Orange when half expired
+    } else {
+        fillColor = '#4e54ff'; // Blue when plenty of time
+    }
+    
+    game.ctx.fillStyle = fillColor;
+    game.ctx.fillRect(barX, barY, fillWidth, barHeight);
+}
+function initScreenShake() {
+    game.screenShake = {
+        intensity: 0,
+        duration: 0,
+        offsetX: 0,
+        offsetY: 0
+    };
+}
+
+function updateScreenShake() {
+    if (game.screenShake.duration > 0) {
+        game.screenShake.duration -= game.deltaTime;
+        
+        // Calculate random offset based on intensity
+        if (game.screenShake.duration > 0) {
+            const decay = game.screenShake.duration / game.screenShake.initialDuration;
+            const intensity = game.screenShake.intensity * decay;
+            
+            game.screenShake.offsetX = (Math.random() * 2 - 1) * intensity;
+            game.screenShake.offsetY = (Math.random() * 2 - 1) * intensity;
+        } else {
+            // Reset when done
+            game.screenShake.offsetX = 0;
+            game.screenShake.offsetY = 0;
+            game.screenShake.duration = 0;
+        }
+    }
+}
+
+function applyScreenShake(intensity, duration) {
+    // Skip if settings disable screen shake or already shaking more intensely
+    if (game.screenShake.intensity >= intensity) return;
+    
+    game.screenShake.intensity = intensity;
+    game.screenShake.duration = duration;
+    game.screenShake.initialDuration = duration;
+}
+
+// Apply screen shake during rendering
+function applyScreenShakeToCanvas() {
+    if (game.screenShake.duration <= 0) return;
+    
+    game.ctx.save();
+    game.ctx.translate(game.screenShake.offsetX, game.screenShake.offsetY);
+}
+
+function resetScreenShakeTransform() {
+    if (game.screenShake.duration <= 0) return;
+    
+    game.ctx.restore();
+}function initDynamicDifficulty() {
+    game.difficulty = {
+        level: 1.0,       // Base difficulty multiplier
+        playerScore: 0,   // Last known player score
+        deathCount: 0,    // Times player has died
+        adjustment: 0,    // Current adjustment (-0.3 to +0.3)
+        lastCheck: 0,     // Time since last adjustment
+        checkInterval: 60 // Seconds between adjustments
+    };
+}
+
+function updateDynamicDifficulty() {
+    // Update check timer
+    game.difficulty.lastCheck += game.deltaTime;
+    
+    // Check if it's time to evaluate difficulty
+    if (game.difficulty.lastCheck >= game.difficulty.checkInterval) {
+        // Reset timer
+        game.difficulty.lastCheck = 0;
+        
+        // Calculate score gain since last check
+        const scoreGain = game.score - game.difficulty.playerScore;
+        game.difficulty.playerScore = game.score;
+        
+        // Calculate adjustment based on score gain
+        // High score gain = player doing well = increase difficulty
+        // Low score gain = player struggling = decrease difficulty
+        let newAdjustment = 0;
+        
+        if (scoreGain < 500) {
+            // Player is struggling, reduce difficulty
+            newAdjustment = -0.1;
+        } else if (scoreGain > 2000) {
+            // Player is doing very well, increase difficulty
+            newAdjustment = 0.1;
+        } else if (scoreGain > 1000) {
+            // Player is doing okay, slightly increase difficulty
+            newAdjustment = 0.05;
+        }
+        
+        // Apply adjustment within limits
+        game.difficulty.adjustment = Math.max(-0.3, Math.min(0.3, game.difficulty.adjustment + newAdjustment));
+        
+        // Calculate final difficulty level
+        game.difficulty.level = 1.0 + game.difficulty.adjustment + (game.wave * 0.05);
+        
+        // Cap difficulty between 0.7 and 1.5
+        game.difficulty.level = Math.max(0.7, Math.min(1.5, game.difficulty.level));
+    }
+}
+
+// Apply difficulty to enemy creation
+function applyDifficultyToEnemy(enemy) {
+    // Adjust enemy health
+    enemy.health *= game.difficulty.level;
+    
+    // Adjust enemy speed
+    enemy.maxSpeed *= (0.9 + (game.difficulty.level * 0.1));
+    
+    // Adjust damage
+    enemy.damage *= game.difficulty.level;
+    
+    return enemy;
+}
+
+// === STEP 6: INTEGRATE NEW FEATURES INTO GAME LOOP ===
+// Insert calls to these functions into appropriate places
+
+// Insert into init() function
+function enhancedInit() {
+    initComboSystem();
+    initScreenShake();
+    initDynamicDifficulty();
+}
+
+// Insert into update() function
+function enhancedUpdate() {
+    updateComboSystem();
+    updateScreenShake();
+    updateDynamicDifficulty();
+    
+    if (game.isMobile) {
+        game.updateMobileButtons();
+    }
+}
+
+// Insert into render() function
+function enhancedRender() {
+    // Apply screen shake at the start of rendering
+    applyScreenShakeToCanvas();
+    
+    // (Original rendering code here)
+    
+    // Draw new UI elements
+    drawPlayerMovementIndicators();
+    drawMiniMap();
+    drawComboIndicator();
+    
+    // Reset screen shake at the end of rendering
+    resetScreenShakeTransform();
+}
+
+// === STEP 7: MODIFY EXISTING FUNCTIONS ===
+// Here are the necessary modifications to integrate our new features
+
+// Modify createEnemy() function to apply difficulty scaling
+function modifiedCreateEnemy(type = 'regular') {
+    // [existing code to create an enemy]
+    
+    // Apply difficulty scaling
+    enemy = applyDifficultyToEnemy(enemy);
+    
+    return enemy;
+}
+
+// Modify where enemies are destroyed to implement combo system
+function modifiedDestroyEnemy(enemy, index) {
+    // [existing code to calculate score, etc.]
+    
+    // Increase combo
+    increaseCombo(enemy.x, enemy.y, enemy.scoreValue);
+    
+    // [rest of existing destroy enemy code]
+}
+
+// Modify explosions to trigger screen shake
+function modifiedCreateExplosion(x, y, size = 1, color = COLORS.explosion1) {
+    // [existing explosion code]
+    
+    // Add screen shake based on explosion size
+    if (size > 0.5) {
+        applyScreenShake(size * 5, size * 0.3);
+    }
+    
+    // [rest of existing code]
+}
+
+// Modify player damage to trigger screen shake
+function modifiedPlayerDamage(damage) {
+    // [existing damage code]
+    
+    // Add screen shake based on damage
+    const shakeIntensity = Math.min(15, damage / 5);
+    applyScreenShake(shakeIntensity, 0.3);
+    
+    // [rest of existing code]
+}
+
+// === STEP 8: STARTUP INTEGRATION ===
+// Make sure all new systems get initialized
+
+// Add to startGame() function
+function enhancedStartGame() {
+    // [existing code]
+    
+    // Initialize new systems
+    initComboSystem();
+    initScreenShake();
+    initDynamicDifficulty();
+    
+    // [rest of existing code]
+}
 function createTower(x, y, type) {
     // Ensure we're not placing on top of another tower or the central body
     for (const tower of defenseTowers) {
@@ -1503,7 +1945,11 @@ function startGame() {
     floatingTexts = [];
     defenseTowers = [];
     bosses = [];
-    
+    addCSS();
+    const sensitivitySlider = document.getElementById('movement-sensitivity');
+    if (sensitivitySlider) {
+        sensitivitySlider.value = game.settings.movementSensitivity.toString();
+    }
     // Create first wave - BUT DON'T CHECK FOR NEXT WAVE YET
     // This is where the bug might be occurring
     createWave(); // This creates wave 1
@@ -1612,15 +2058,22 @@ function updatePlayer() {
     if (game.isMobile) {
         // Mobile joystick controls
         if (input.joystick.active) {
-            player.thrust.x = input.joystick.x * 350;
-            player.thrust.y = input.joystick.y * 350;
+            player.thrust.x = input.joystick.x * 350 * game.settings.movementSensitivity;
+            player.thrust.y = input.joystick.y * 350 * game.settings.movementSensitivity;
         }
     } else {
         // Keyboard controls
-        if (input.keys['w'] || input.keys['arrowup']) player.thrust.y = -350;
-        if (input.keys['s'] || input.keys['arrowdown']) player.thrust.y = 350;
-        if (input.keys['a'] || input.keys['arrowleft']) player.thrust.x = -350;
-        if (input.keys['d'] || input.keys['arrowright']) player.thrust.x = 350;
+        let thrustPower = 350 * game.settings.movementSensitivity;
+        
+        // Apply brake/precision mode - reduce thrust and add drag when holding SHIFT
+        if (game.brakeActive) {
+            thrustPower *= 0.4; // 40% normal speed when precision mode active
+        }
+        
+        if (input.keys['w'] || input.keys['arrowup']) player.thrust.y = -thrustPower;
+        if (input.keys['s'] || input.keys['arrowdown']) player.thrust.y = thrustPower;
+        if (input.keys['a'] || input.keys['arrowleft']) player.thrust.x = -thrustPower;
+        if (input.keys['d'] || input.keys['arrowright']) player.thrust.x = thrustPower;
     }
     
     // Apply gravity from central body
@@ -1648,11 +2101,52 @@ function updatePlayer() {
     player.shielded = inShieldRange;
     player.shieldStrength = maxShieldStrength;
     
+    // Apply drag/friction (increased during brake mode)
+    const dragFactor = game.brakeActive ? 3.0 : 1.0;
+    player.velocity.x *= (1 - 0.8 * game.deltaTime * dragFactor);
+    player.velocity.y *= (1 - 0.8 * game.deltaTime * dragFactor);
+    
+    // Apply dash boost if active
+    if (game.dashActive) {
+        // Calculate direction based on keys being pressed
+        let dashDirX = 0;
+        let dashDirY = 0;
+        
+        if (input.keys['w'] || input.keys['arrowup']) dashDirY = -1;
+        if (input.keys['s'] || input.keys['arrowdown']) dashDirY = 1;
+        if (input.keys['a'] || input.keys['arrowleft']) dashDirX = -1;
+        if (input.keys['d'] || input.keys['arrowright']) dashDirX = 1;
+        
+        // Normalize direction
+        const dashDirLength = Math.sqrt(dashDirX * dashDirX + dashDirY * dashDirY);
+        if (dashDirLength > 0) {
+            dashDirX /= dashDirLength;
+            dashDirY /= dashDirLength;
+            
+            // Apply dash boost
+            player.velocity.x = dashDirX * MAX_PLAYER_SPEED * game.settings.dashPower;
+            player.velocity.y = dashDirY * MAX_PLAYER_SPEED * game.settings.dashPower;
+            
+            // Create visual dash effect
+            for (let i = 0; i < 10; i++) {
+                createParticle(
+                    player.x - dashDirX * player.radius * 0.5, 
+                    player.y - dashDirY * player.radius * 0.5, 
+                    player.color
+                );
+            }
+        }
+    }
+    
     // Limit speed
+    const maxSpeed = game.dashActive ? 
+                     MAX_PLAYER_SPEED * game.settings.dashPower : 
+                     MAX_PLAYER_SPEED;
+    
     const speed = Math.sqrt(player.velocity.x * player.velocity.x + player.velocity.y * player.velocity.y);
-    if (speed > MAX_PLAYER_SPEED) {
-        player.velocity.x = (player.velocity.x / speed) * MAX_PLAYER_SPEED;
-        player.velocity.y = (player.velocity.y / speed) * MAX_PLAYER_SPEED;
+    if (speed > maxSpeed) {
+        player.velocity.x = (player.velocity.x / speed) * maxSpeed;
+        player.velocity.y = (player.velocity.y / speed) * maxSpeed;
     }
     
     // Update position
@@ -1760,6 +2254,25 @@ function updatePlayer() {
         player.invulnerableTime -= game.deltaTime;
         if (player.invulnerableTime <= 0) {
             player.invulnerable = false;
+        }
+    }
+    
+    // Update dash cooldown
+    if (!game.dashReady) {
+        game.dashCooldownTime -= game.deltaTime * 1000;
+        
+        if (game.dashCooldownTime <= 0) {
+            game.dashReady = true;
+            createFloatingText(player.x, player.y - 40, "Dash Ready!", '#4e54ff', 15);
+        }
+    }
+    
+    // Update dash active state
+    if (game.dashActive) {
+        game.dashDuration -= game.deltaTime * 1000;
+        
+        if (game.dashDuration <= 0) {
+            game.dashActive = false;
         }
     }
 }
@@ -3334,6 +3847,33 @@ function togglePause() {
     playSound(sounds.click);
 }
 
+function addSettingsToDOM() {
+    const volumeControls = document.querySelector('.volume-controls');
+    
+    // Create the sensitivity control and add it after the volume controls
+    const sensitivityControl = document.createElement('div');
+    sensitivityControl.className = 'volume-control sensitivity-control';
+    sensitivityControl.innerHTML = `
+        <div class="setting-label">
+            <i class="fas fa-tachometer-alt"></i>
+            <span>Movement Sensitivity</span>
+        </div>
+        <input type="range" id="movement-sensitivity" min="0.5" max="1.5" step="0.1" value="1.0">
+        <span id="sensitivity-value">1.0</span>
+    `;
+    volumeControls.appendChild(sensitivityControl);
+
+    // Add event listener for the sensitivity slider
+    const sensitivitySlider = document.getElementById('movement-sensitivity');
+    const sensitivityValue = document.getElementById('sensitivity-value');
+    
+    sensitivitySlider.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        game.settings.movementSensitivity = value;
+        sensitivityValue.textContent = value.toFixed(1);
+    });
+}
+
 function resumeGame() {
     if (game.paused) {
         togglePause();
@@ -3437,11 +3977,219 @@ function render() {
     
     // Draw floating text
     drawFloatingTexts();
-    
+
+    drawPlayerMovementIndicators();
+
+    drawMiniMap();
+
     drawDrone();
     // Draw tower placement guide
     if (game.placingTower) {
         drawTowerPlacementGuide();
+    }
+}
+
+function drawMiniMap() {
+    // Position and size
+    const mapSize = Math.min(game.width, game.height) * 0.15;
+    const margin = 10;
+    const mapX = game.width - mapSize - margin;
+    const mapY = game.height - mapSize - margin;
+    
+    // Draw background
+    game.ctx.fillStyle = 'rgba(10, 11, 26, 0.7)';
+    game.ctx.strokeStyle = 'rgba(78, 84, 255, 0.5)';
+    game.ctx.lineWidth = 1;
+    game.ctx.beginPath();
+    game.ctx.rect(mapX, mapY, mapSize, mapSize);
+    game.ctx.fill();
+    game.ctx.stroke();
+    
+    // Calculate scale factor
+    const scaleFactor = mapSize / Math.max(game.width, game.height);
+    
+    // Draw central body
+    const centralX = mapX + (centralBody.x * scaleFactor);
+    const centralY = mapY + (centralBody.y * scaleFactor);
+    
+    game.ctx.fillStyle = centralBody.color;
+    game.ctx.beginPath();
+    game.ctx.arc(centralX, centralY, centralBody.radius * scaleFactor, 0, Math.PI * 2);
+    game.ctx.fill();
+    
+    // Draw enemies (red dots)
+    game.ctx.fillStyle = '#ff5e78';
+    for (const enemy of enemies) {
+        const enemyX = mapX + (enemy.x * scaleFactor);
+        const enemyY = mapY + (enemy.y * scaleFactor);
+        
+        // Skip if outside map bounds
+        if (enemyX < mapX || enemyX > mapX + mapSize || enemyY < mapY || enemyY > mapY + mapSize) {
+            continue;
+        }
+        
+        game.ctx.beginPath();
+        game.ctx.arc(enemyX, enemyY, 2, 0, Math.PI * 2);
+        game.ctx.fill();
+    }
+    
+    // Draw bosses (larger red dots)
+    game.ctx.fillStyle = '#ff3054';
+    for (const boss of bosses) {
+        const bossX = mapX + (boss.x * scaleFactor);
+        const bossY = mapY + (boss.y * scaleFactor);
+        
+        // Skip if outside map bounds
+        if (bossX < mapX || bossX > mapX + mapSize || bossY < mapY || bossY > mapY + mapSize) {
+            continue;
+        }
+        
+        game.ctx.beginPath();
+        game.ctx.arc(bossX, bossY, 4, 0, Math.PI * 2);
+        game.ctx.fill();
+    }
+    
+    // Draw towers
+    for (const tower of defenseTowers) {
+        const towerX = mapX + (tower.x * scaleFactor);
+        const towerY = mapY + (tower.y * scaleFactor);
+        
+        // Skip if outside map bounds
+        if (towerX < mapX || towerX > mapX + mapSize || towerY < mapY || towerY > mapY + mapSize) {
+            continue;
+        }
+        
+        game.ctx.fillStyle = tower.color;
+        game.ctx.beginPath();
+        game.ctx.arc(towerX, towerY, 3, 0, Math.PI * 2);
+        game.ctx.fill();
+    }
+    
+    // Draw player (white dot)
+    if (player) {
+        const playerX = mapX + (player.x * scaleFactor);
+        const playerY = mapY + (player.y * scaleFactor);
+        
+        game.ctx.fillStyle = '#ffffff';
+        game.ctx.beginPath();
+        game.ctx.arc(playerX, playerY, 3, 0, Math.PI * 2);
+        game.ctx.fill();
+        
+        // Draw player direction
+        const directionLength = 6;
+        const dirX = playerX + Math.cos(player.angle) * directionLength;
+        const dirY = playerY + Math.sin(player.angle) * directionLength;
+        
+        game.ctx.strokeStyle = '#ffffff';
+        game.ctx.lineWidth = 1;
+        game.ctx.beginPath();
+        game.ctx.moveTo(playerX, playerY);
+        game.ctx.lineTo(dirX, dirY);
+        game.ctx.stroke();
+    }
+    
+    // Draw powerups (green dots)
+    game.ctx.fillStyle = '#50c878';
+    for (const powerup of powerups) {
+        const powerupX = mapX + (powerup.x * scaleFactor);
+        const powerupY = mapY + (powerup.y * scaleFactor);
+        
+        // Skip if outside map bounds
+        if (powerupX < mapX || powerupX > mapX + mapSize || powerupY < mapY || powerupY > mapY + mapSize) {
+            continue;
+        }
+        
+        game.ctx.beginPath();
+        game.ctx.arc(powerupX, powerupY, 2, 0, Math.PI * 2);
+        game.ctx.fill();
+    }
+    
+    // Add mini-map label
+    game.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    game.ctx.font = '10px "Exo 2"';
+    game.ctx.textAlign = 'left';
+    game.ctx.fillText('RADAR', mapX + 5, mapY + 12);
+}
+
+function drawPlayerMovementIndicators() {
+    if (!player) return;
+    
+    // Draw velocity vector line
+    const speed = Math.sqrt(player.velocity.x * player.velocity.x + player.velocity.y * player.velocity.y);
+    const maxSpeed = game.dashActive ? MAX_PLAYER_SPEED * game.settings.dashPower : MAX_PLAYER_SPEED;
+    const speedRatio = speed / maxSpeed;
+    
+    if (speed > 50) { // Only show indicator when moving at reasonable speed
+        // Calculate velocity direction and length
+        const velocityAngle = Math.atan2(player.velocity.y, player.velocity.x);
+        const indicatorLength = player.radius * 2 * speedRatio;
+        
+        const startX = player.x;
+        const startY = player.y;
+        const endX = startX + Math.cos(velocityAngle) * indicatorLength;
+        const endY = startY + Math.sin(velocityAngle) * indicatorLength;
+        
+        // Draw velocity vector
+        game.ctx.strokeStyle = game.brakeActive ? '#50c878' : '#4e54ff';
+        game.ctx.lineWidth = 2;
+        game.ctx.setLineDash([3, 3]);
+        game.ctx.beginPath();
+        game.ctx.moveTo(startX, startY);
+        game.ctx.lineTo(endX, endY);
+        game.ctx.stroke();
+        game.ctx.setLineDash([]);
+        
+        // Draw arrowhead
+        const arrowSize = 5;
+        game.ctx.fillStyle = game.brakeActive ? '#50c878' : '#4e54ff';
+        game.ctx.save();
+        game.ctx.translate(endX, endY);
+        game.ctx.rotate(velocityAngle);
+        game.ctx.beginPath();
+        game.ctx.moveTo(0, 0);
+        game.ctx.lineTo(-arrowSize, arrowSize / 2);
+        game.ctx.lineTo(-arrowSize, -arrowSize / 2);
+        game.ctx.closePath();
+        game.ctx.fill();
+        game.ctx.restore();
+    }
+    
+    // Show brake indicator when active
+    if (game.brakeActive) {
+        game.ctx.fillStyle = 'rgba(80, 200, 120, 0.3)';
+        game.ctx.beginPath();
+        game.ctx.arc(player.x, player.y, player.radius * 1.5, 0, Math.PI * 2);
+        game.ctx.fill();
+        
+        game.ctx.strokeStyle = '#50c878';
+        game.ctx.lineWidth = 1;
+        game.ctx.setLineDash([2, 2]);
+        game.ctx.beginPath();
+        game.ctx.arc(player.x, player.y, player.radius * 1.5, 0, Math.PI * 2);
+        game.ctx.stroke();
+        game.ctx.setLineDash([]);
+    }
+    
+    // Show dash effect when active
+    if (game.dashActive) {
+        // Calculate dash trail effect
+        const trailLength = 6;
+        const dashAngle = Math.atan2(player.velocity.y, player.velocity.x);
+        
+        for (let i = 0; i < trailLength; i++) {
+            const distance = (i + 1) * player.radius * 0.4;
+            const alpha = 0.7 - (i / trailLength) * 0.7;
+            
+            game.ctx.fillStyle = `rgba(78, 84, 255, ${alpha})`;
+            game.ctx.beginPath();
+            game.ctx.arc(
+                player.x - Math.cos(dashAngle) * distance,
+                player.y - Math.sin(dashAngle) * distance,
+                player.radius * (1 - i / trailLength * 0.5),
+                0, Math.PI * 2
+            );
+            game.ctx.fill();
+        }
     }
 }
 
